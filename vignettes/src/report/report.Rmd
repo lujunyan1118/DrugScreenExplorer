@@ -1,0 +1,232 @@
+---
+params:
+  set_title: "new title"
+  set_author: "new author"
+  showCode: FALSE
+  ifPlatePlot: TRUE
+title: "`r params$set_title`"
+author: "`r params$set_author`"
+date: "`r doc_date()`"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+---
+
+# Dataset summary
+
+```{r, echo = FALSE}
+library(knitr)
+library(kableExtra)
+library(gridExtra)
+library(tidyverse)
+#read in data, will not show.
+screenData <- readRDS("screenData.rds")
+```
+
+## Basic information
+
+### Screen format
+```{r screen format, echo=params$showCode, warning=FALSE, message=FALSE}
+screenInfo <- tibble(info = c("Plate Number", "Plate format"), 
+                    value = c(length(unique(screenData$fileName)), length(unique(screenData$wellID))))
+
+if ("batch" %in% names(screenData)) screenInfo <- rbind(screenInfo, c("Batch number",length(unique(screenData$batch))))
+if ("name" %in% names(screenData)) screenInfo <- rbind(screenInfo, c("Number of drugs/probs",length(unique(screenData$name))))
+if ("wellType" %in% names(screenData)) screenInfo <- rbind(screenInfo, c("Well types",paste0(unique(screenData$wellType), collapse = ",")))
+
+kable(screenInfo, align = "c", col.names = NULL, format = "html") %>% kable_styling()
+```
+
+### Plate layout
+
+```{r prepare layout, echo=params$showCode, warning=FALSE, message=FALSE}
+if (! "plateID" %in% colnames(screenData)) screenData$plateID <- 1
+plotTab <- filter(screenData, !duplicated(paste0(wellID,"_",plateID))) %>% 
+  mutate(fileName = sprintf("layout %s",plateID))
+plotList <- platePlot(plotTab, plotType = "layout")
+nLayout <- length(unique(plotTab$plateID))
+```
+
+
+```{r plot layout, echo=params$showCode, fig.width=10, fig.height=((nLayout+1) %/% 2)*3}
+grid.arrange(grobs = plotList, ncol=2)
+```
+
+## Raw signal distribution on each plate
+```{r plot raw distribution, echo=params$showCode, warning=FALSE, fig.height=8, fig.width=8}
+#check how many plates are there in the screen
+nPlate <- length(unique(screenData))
+g <- plotRawCount(screenData, ifLog10=TRUE)
+
+if (nPlate <= 20) {
+  plot(g)
+} else {
+  gTop20 <- plotRawCount(screenData, topN = 20, ifLog10 = TRUE)
+  plot(gTop20)
+  
+  #create a pdf file for all plates
+  pdf("plots/rawCountDistribution.pdf", width = 8, height = nPlate*0.7)
+  plot(g)
+  dev.off()
+}
+```
+`r if(nPlate > 20) {"Only the first 20 plates are shown in html report. The plot for all plates can be found [here](./plots/rawCountDistribution.pdf)"}`
+
+
+`r if(params$ifPlatePlot) {"## Plate plot"}`
+
+```{r prepare plate plot, echo= params$showCode & params$ifPlatePlot, eval = params$ifPlatePlot}
+if (!"normVal" %in% colnames(screenData)) {
+  print("Normalized viablity not found. Using z-score")
+  g <- platePlot(screenData, plotType = "zscore")
+} else {
+  print("Normalized viablity found. Using viability values")
+  g <- platePlot(screenData, plotType = "viability")
+}
+
+nPlate <- length(unique(screenData))
+```
+
+```{r plot plate plots, echo= params$showCode & params$ifPlatePlot, eval = params$ifPlatePlot, fig.width=16, fig.height=((nPlate+1) %/% 2)*3}
+if (nPlate <= 10) {
+  plot(grid.arrange(grobs = g, ncol = 2))
+} else {
+  plot(grid.arrange(grobs = g[1:10], ncol = 2))
+  makepdf(g, "plots/platePlots.pdf", 2, 3, 12, 12)
+}
+```
+`r if(nPlate > 10 & params$ifPlatePlot) {"Only the first 10 plates are shown in html report. The plot for all plates can be found [here](./plots/platePlots.pdf)"}`
+
+
+# Quality assessment
+
+## Variance vs rank of mean
+
+```{r, echo=params$showCode, fig.width=8, fig.height=8}
+perPlateVar <- mutate(screenData, log10Val = log10(value)) %>% group_by(fileName) %>%
+  summarise(meanRaw = mean(value), sdRaw = sd(value),
+            meanLog = mean(log10Val), sdLog = sd(log10Val))
+
+customTheme = theme_bw() + theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+p1 <- arrange(perPlateVar, meanRaw) %>% mutate(rank = seq(nrow(perPlateVar))) %>%
+  ggplot(aes(x=rank, y = sdRaw)) + geom_point(color = "royalblue") + xlab("rank (mean)") + ylab("standard deviation") +
+  ggtitle("Per-plate") + customTheme
+p2 <- arrange(perPlateVar, meanLog) %>% mutate(rank = seq(nrow(perPlateVar))) %>%
+  ggplot(aes(x=rank, y = sdLog)) + geom_point(color = "royalblue") + xlab("rank (mean)") + ylab("standard deviation") +
+  ggtitle("Per-plate (log10 scale)") + customTheme
+
+perWellVar <- mutate(screenData, log10Val = log10(value)) %>% group_by(wellID) %>%
+  summarise(meanRaw = mean(value), sdRaw = sd(value),
+            meanLog = mean(log10Val), sdLog = sd(log10Val))
+
+p3 <- arrange(perWellVar, meanRaw) %>% mutate(rank = seq(nrow(perWellVar))) %>%
+  ggplot(aes(x=rank, y = sdRaw)) + geom_point(color = "firebrick") + xlab("rank (mean)") + ylab("standard deviation") +
+  ggtitle("Per-well") + customTheme
+p4 <- arrange(perWellVar, meanLog) %>% mutate(rank = seq(nrow(perWellVar))) %>%
+  ggplot(aes(x=rank, y = sdLog)) + geom_point(color = "firebrick") + xlab("rank (mean)") + ylab("standard deviation") +
+  ggtitle("Per-well (log10 scale)") + customTheme
+
+grid.arrange(p1,p2,p3,p4, ncol = 2)
+```
+
+## Edge effect
+
+### Plot intensity of edge effect
+```{r prepare edge effect table, echo=params$showCode}
+nLayer <- 3
+edgePlot <- estimateEdgeEffect(screenData, nLayer = nLayer, onlyNeg = TRUE) %>%
+  select(value, fileName, paste0("edgeRatio",seq(nLayer))) %>%
+  filter(!duplicated(fileName))
+
+rankByMean <- group_by(screenData, fileName) %>% summarise(rawMean = mean(value)) %>%
+  arrange(rawMean)
+
+mapCol <- structure(seq(nLayer), names = paste0("edgeRatio", seq(nLayer)))
+plotTab <- arrange(edgePlot, value) %>% mutate(fileName = factor(fileName, levels = rev(rankByMean$fileName))) %>%
+  select(fileName, names(mapCol)) %>% gather(key = "layer", value = "edgeRatio", -fileName) %>% 
+  mutate(layer = factor(mapCol[layer])) %>% group_by(fileName, layer) %>% 
+  summarise(meanFac = mean(edgeRatio), sdFac = sd(edgeRatio)) 
+
+
+```
+
+```{r plot edge intensity, echo = params$showCode}
+#create plot
+p <- ggplot(plotTab, aes(x=fileName, y = meanFac, fill = layer)) +
+ geom_bar(position = position_dodge(), stat = "identity") + coord_flip() + theme_bw() +
+ xlab("file names (ranked by mean of raw counts)") + ylab("edge effect ratio") + scale_fill_brewer(palette = 1)
+
+allNames <- unique(plotTab$fileName)
+if (length(allNames) > 10) {
+  plotTab_top20 <- filter(plotTab, fileName %in% allNames[1:10])
+  p_top20 <- ggplot(plotTab_top20, aes(x=fileName, y = meanFac, fill = layer)) + 
+    geom_bar(position = position_dodge(), stat = "identity") + coord_flip() + theme_bw() + 
+    xlab("file names (ranked by mean of raw counts)") + ylab("edge effect ratio") + scale_fill_brewer(palette = 1)
+  plot(p_top20)
+  pdf("plots/edgeEffectIntensity.pdf", width = 10, height = length(allNames)*0.6)
+  plot(p)
+  dev.off()
+} else {
+  plot(p)
+}
+```
+`r if(length(allNames) > 10) {"Only the first 20 plates are shown in html report. The plot for all plates can be found [here](./plots/edgeEffectIntensity.pdf)."}`
+
+
+### PCA plot
+```{r PCA, echo = params$showCode, fig.height=10, fig.width=10}
+#Wether this data has been normlized by netagive controls?
+if (! "normVal" %in% colnames(screenData)) {
+  #no normalization 
+  print("No viability data found, using per-plate z-score")
+  calcZ <- function(x) mutate(x, normVal = (value-mean(value))/sd(value))
+  matPlate <- group_by(screenData, fileName) %>% do(calcZ(.))
+} else matPlate <- screenData
+
+#prepare matrix for PCA
+matPlate <- select(matPlate, wellID, fileName, value) %>% spread(key = wellID, value = value) %>% 
+  data.frame()
+fileNameList <- matPlate$fileName
+matPlate$fileName <- NULL
+matPlate <- log2(as.matrix(matPlate))
+
+#perform PCA
+pcRes <- prcomp(matPlate, center= TRUE, scale. = FALSE)
+varExp <- pcRes$sdev^2
+varExp <- varExp/sum(varExp)
+plotTab <- tibble(PC1 = pcRes$x[,1], PC2= pcRes$x[,2],
+                  fileName = fileNameList)
+
+#add batch information if present
+if ("batch" %in% colnames(screenData)) {
+  plotTab <- mutate(plotTab, batch = factor(screenData[match(fileNameList, screenData$fileName),]$batch))
+  p <- ggplot(plotTab, aes(x=PC1, y = PC2, col = batch, label = fileName)) + geom_point()
+} else {
+  p <- ggplot(plotTab, aes(x=PC1, y = PC2, label = fileName)) + geom_point(col = "royalblue")
+}
+p <- p + theme_bw() + xlab(sprintf("PC1 (%1.2f%%)", varExp[1]*100)) + ylab(sprintf("PC2 (%1.2f%%)", varExp[2]*100)) +
+  ggtitle("Principal component analysis on plates") +  geom_text(size=3, nudge_y = -0.1) + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+plot(p)
+```
+
+### MDS
+```{r MDS, echo = params$showCode, fig.height=10, fig.width=10}
+mdsRes <- cmdscale(dist(matPlate))
+plotTab <- tibble(X = mdsRes[,1], Y= mdsRes[,2],
+                  fileName = fileNameList)
+#add batch information if present
+if ("batch" %in% colnames(screenData)) {
+  plotTab <- mutate(plotTab, batch = factor(screenData[match(fileNameList, screenData$fileName),]$batch))
+  p <- ggplot(plotTab, aes(x=X, y = Y, col = batch, label = fileName)) + geom_point()
+} else {
+  p <- ggplot(plotTab, aes(x=X, y = Y, label = fileName)) + geom_point(col = "royalblue")
+}
+
+p <- p + theme_bw() + ggtitle("Multidimensional Scaling (MDS) on plates") +  geom_text(size=3, nudge_y = -0.1) + 
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+plot(p)
+```
+
+

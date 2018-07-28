@@ -21,7 +21,7 @@
 createPlateInput <- function(rawDir, file, entries = c(), batchAsFolder = FALSE, csvFormat = "csv2") {
   if (!batchAsFolder) {
     allFiles <- list.files(path = rawDir, recursive = TRUE)
-    outTable <- tibble(fileName = allFiles)
+    outTable <- tibble(fileName = basename(allFiles))
   } else {
     #raw data from different batches are stored in subfolders
     batches <- list.dirs(rawDir,full.names = FALSE)
@@ -100,7 +100,6 @@ createWellInput <- function(file, colNum, rowNum, entries = c("name","concentrat
 
 readPlate <- function(plateFile,rowRange = c(3,18), colRange = 2, sep = "[;\t]",
                       commaAsDecimal = FALSE) {
-
   txt <-readLines(plateFile)
 
   if(length(rowRange) == 1) {
@@ -112,6 +111,7 @@ readPlate <- function(plateFile,rowRange = c(3,18), colRange = 2, sep = "[;\t]",
       txtSp <- gsub("[,]",".",txt[x]) else
         txtSp <- txt[x] #only "," or "." as decimal
     txtSp <- strsplit(txtSp, split = sep)[[1]]
+    txtSp <- txtSp[txtSp != ""]
     if (length(colRange) == 1) colRange <- c(colRange, length(txtSp))
     txtSp <- txtSp[colRange[1]:colRange[2]]
   })
@@ -169,8 +169,14 @@ readScreen <- function(rawDir, plateAnnotationFile, wellAnnotationFile,
 
   #read screening data plate by plate
   screenData <- lapply(rawFileList, function(fileName) {
-    plateData <- readPlate(plateFile = fileName, rowRange, colRange, sep, commaAsDecimal) %>%
-      mutate(fileName = basename(fileName))
+
+    plateData <- tryCatch({
+      readPlate(plateFile = fileName, rowRange, colRange, sep, commaAsDecimal) %>%
+      mutate(fileName = basename(fileName)) },
+      error = function(e) {
+        stop(sprintf("Error encountered when reading %s", fileName))
+      })
+
   }) %>% bind_rows()
 
   #read sample annotation files
@@ -190,11 +196,9 @@ readScreen <- function(rawDir, plateAnnotationFile, wellAnnotationFile,
        drugAnno <- read_csv(wellAnnotationFile)
 
   #add drug annotation information
-  if ("plateID" %in% colnames(drugAnno)) {
-    if (length(unique(drugAnno$plateID) == 1))
-        screenData <- left_join(screenData, drugAnno, by = "wellID") else
-          screenData <- left_join(screenData, drugAnno, by = c("wellID", "plateID"))
-  } else  screenData <- left_join(screenData, drugAnno, by = "wellID")
+  if ("plateID" %in% colnames(drugAnno))
+    screenData <- left_join(screenData, drugAnno, by = c("wellID", "plateID"))
+  else  screenData <- left_join(screenData, drugAnno, by = "wellID")
 
   #add well type information
   if (length(intersect(negWell, posWell)) != 0) stop("Overlap in postive and negative control well list")
@@ -211,7 +215,10 @@ readScreen <- function(rawDir, plateAnnotationFile, wellAnnotationFile,
     screenData <- normalizePlate(screenData = screenData, method = method, discardLayer = discardLayer)
   }
 
-  screenData <- ungroup(screenData)
+  #final adjustment
+  ## batch as factor
+  if ("batch" %in% colnames(screenData)) screenData$batch <- as.factor(screenData$batch)
+  screenData <- mutate_if(screenData, is.character, as.factor) %>% ungroup(screenData)
   return(screenData)
 }
 

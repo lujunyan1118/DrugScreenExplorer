@@ -17,10 +17,10 @@ correctEdgeEffect(screenData, estimateMethod = "loess", useNeg = TRUE,
 
 \item{span}{A numeric value. The span parameter for loess, which controls the degree of smoothing.}
 
-\item{correctMethod}{A character string specifying the method used for substracting the edge effect. Currently two methods "bliss" and "linear" are supported.}
+\item{correctMethod}{A character string specifying the method used for subtracting the edge effect. Currently two methods "bliss" and "linear" are supported.}
 
 \item{method}{A character string specifing the method used for estimating edge effect. Currently two methods are supported: "loess", which uses local regression to estimate edge effect; "sigmoid", a experimental feature, using 2D-sigmoid model to estimate edge effect.}
 }
 \description{
-This function substract the incubation (or edge) effect from the observed signal intensity to retain the true signal intensity. If the incubation effect has already been estimated by fitEdgeEffect() function, the values in the edgeFactor column will be used. Otherwsie, this function will call fitEdgeEffect function to calculate the edge effect.
+This function subtract the incubation (or edge) effect from the observed signal intensity to retain the true signal intensity. If the incubation effect has already been estimated by fitEdgeEffect() function, the values in the edgeFactor column will be used. Otherwsie, this function will call fitEdgeEffect function to calculate the edge effect.
 }

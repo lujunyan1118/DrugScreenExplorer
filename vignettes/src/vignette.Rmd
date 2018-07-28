@@ -3,8 +3,7 @@ title: "Introduction to DrugScreenExplorer"
 author: "Junyan Lu"
 date: "`r doc_date()`"
 output:
-  BiocStyle::html_document2:
-    toc_float: false
+  BiocStyle::pdf_document
 ---
 
 # Getting started
@@ -233,4 +232,16 @@ grid.arrange(grobs = g, ncol =2)
 ```
 Now the incubation effect has been largely removed.
 
-# Interactive data exploration using Shiny app (In development)
+# Interactive data exploration using Shiny app
+
+Prepare data set for shiny app
+```{r}
+screenData.corr <- correctEdgeEffect(screenData, correctMethod = "bliss")
+makeShiny(screenData.corr, sampleAnnotations = c("batch","sampleID","patientID"))
+```
+The functions avaialbe for the shiny app will be dependent on the sample annotations provided by the user.   
+
+**Run shiny app**
+
+The shiny app can be excuted through running "app.R" under "shiny" folder. 
+

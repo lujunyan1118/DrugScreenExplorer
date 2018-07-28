@@ -80,10 +80,6 @@ fitOneSigmoid <- function(plateData, useNeg, useLowConcentrations, lowConcTab) {
 
   paraIni <- c(dr1=dr1,cr2=cr2,dc1=dc1,cc2=cc2,er1=er1,er2=er2,ec1=ec1,ec2=ec2,sr1=sr1,sr2=sr2,sc1=sc1,sc2=sc2)
 
-  predictFun <- function(xr,xc, par) {
-    (1 + (par[1]-1)/(1+exp((xr-par[5])/par[9])) - par[2] + par[2]/(1+exp((xr-par[6])/par[10])))*(1 + (par[3]-1)/(1+exp((xc-par[7])/par[11])) - par[4] + par[4]/(1+exp((xc-par[8])/par[12])))
-  }
-
   esFun <- function(data, par) {
     with(data, sum(((normVal - (1 + (par[1]-1)/(1+exp((numRowID-par[5])/par[9])) - par[2] + par[2]/(1+exp((numRowID-par[6])/par[10])))*(1 + (par[3]-1)/(1+exp((numColID-par[7])/par[11])) - par[4] + par[4]/(1+exp((numColID-par[8])/par[12])))))^2))
   }

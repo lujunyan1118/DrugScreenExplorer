@@ -2,6 +2,10 @@ DrugScreenExplorer is an open-source R package designed for streamlined processi
 Read more at: https://lujunyan1118.github.io/DrugScreenExplorer/
 
 
+
+
+
+
 Copyright (C) 2018  Junyan Lu
 
 This program is free software: you can redistribute it and/or modify

@@ -3,7 +3,8 @@ title: "Introduction to DrugScreenExplorer"
 author: "Junyan Lu"
 date: "`r doc_date()`"
 output:
-  BiocStyle::pdf_document
+  BiocStyle::html_document:
+    toc_float: true
 ---
 
 # Getting started

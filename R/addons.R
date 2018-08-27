@@ -100,3 +100,24 @@ fitOneSigmoid <- function(plateData, useNeg, useLowConcentrations, lowConcTab) {
   plateData$edgeFactor <- edgeFactors
   plateData
 }
+
+
+#function to calculate AUC using linear-log trapezoidal method
+calcAUC <- function(value, conc) {
+  valueConc <- tibble(viab=value, conc=conc) %>%
+    filter(!is.na(conc)) %>%
+    group_by(conc) %>% summarise(viab = mean(viab)) %>%
+    ungroup() %>%  #make sure concentrations are unique
+    arrange(conc)
+  if (nrow(valueConc) %in% c(0,1)) {
+    return(mean(value, na.rm = TRUE))
+
+  } else {
+    areaTotal <- 0
+    for (i in seq(length(value)-1)) {
+      areaEach <- (valueConc$viab[i] + valueConc$viab[i+1])*log(valueConc$conc[i+1]/valueConc$conc[i])*0.5
+      areaTotal <- areaTotal + areaEach
+    }
+    return(areaTotal/log(valueConc[nrow(valueConc),]$conc/valueConc[1,]$conc))
+  }
+}

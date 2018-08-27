@@ -59,6 +59,22 @@ makeShiny <- function(screenData, sampleAnnotations = c("batch","sampleID", "pat
     screenData <- mutate(screenData, batch = as.factor(batch))
   }
 
+  #calculate AUC using linear-log trapezoidal method
+  if ("normVal" %in% colnames(screenData)) {
+    aucTab <- group_by(screenData, sampleID, name) %>%
+      summarize(normVal_auc = calcAUC(normVal,concentration)) %>%
+      ungroup()
+    screenData <- left_join(screenData, aucTab, by = c("name","sampleID"))
+  }
+
+  if ("normVal.cor" %in% colnames(screenData)) {
+    aucTab <- group_by(screenData, sampleID, name) %>%
+      summarize(normVal.cor_auc = calcAUC(normVal.cor,concentration)) %>%
+      ungroup()
+    screenData <- left_join(screenData, aucTab, by = c("name","sampleID"))
+  }
+
+
   #remove group
   screenData <- ungroup(screenData)
 

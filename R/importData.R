@@ -218,7 +218,7 @@ readScreen <- function(rawDir, plateAnnotationFile, wellAnnotationFile,
   #final adjustment
   ## batch as factor
   if ("batch" %in% colnames(screenData)) screenData$batch <- as.factor(screenData$batch)
-  screenData <- mutate_if(screenData, is.character, as.factor) %>% ungroup(screenData)
+    screenData <- mutate_if(screenData, is.character, as.factor) %>% ungroup(screenData)
   return(screenData)
 }
 

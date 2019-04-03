@@ -257,7 +257,7 @@ normalizePlate <- function(screenData, method = "negatives", discardLayer = 0) {
       if (is.na(negMed) | is.na(posMed)) {
         stop("No negative and poitive control wells found on the specified region of the plate")
       } else {
-        onePlate <- mutate(onePlate, normVal = (normVal - posMed)/(negMed - posMed))
+        onePlate <- mutate(onePlate, normVal = (value - posMed)/(negMed - posMed))
       }
     } else stop('Please choose a normalization method, either "negatives" or "NPI"')
     return(onePlate)

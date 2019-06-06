@@ -79,7 +79,7 @@ platePlot <- function(screenData, plotPlate = "all", plotType = "layout", ifCorr
 
     #calculate per-plate z-score
     calcZ <- function(x) mutate(x, zscore = (value-mean(value))/sd(value))
-    matPlate <- group_by(matPlate, fileName) %>% do(calcZ(.))
+    matPlate <- group_by(matPlate, fileName) %>% do(calcZ(.)) %>% ungroup()
 
     if (is.null(limits)) {
       limits <- c(-3,3)
@@ -153,7 +153,7 @@ plotRawCount <- function(screenData, topN = NULL, ifLog10 = FALSE) {
     plotTab <- mutate(plotTab, value = log10(value))
   }
 
-  plotTab <- ungroup(plotTab, fileName) %>% mutate(fileName = factor(fileName, levels = rev(unique(fileName))))
+  plotTab <- mutate(plotTab, fileName = factor(fileName, levels = rev(unique(fileName))))
 
   g <- ggplot(plotTab, aes(x = fileName, y = value)) + geom_jitter(width = .3, alpha=0.3, color = "grey50") +
     geom_boxplot(fill=NA, color = "royalblue2", outlier.shape = NA) + coord_flip() + theme_bw() +
@@ -250,7 +250,7 @@ estimateEdgeEffect <- function(screenData, nLayer = 1, onlyNeg = TRUE, identifie
 
    for ( n in seq(nLayer)) {
      varName <- paste0("edgeRatio",n)
-     edgeEffects <- group_by(screenData, fileName) %>% do(tibble(!! varName := estimateOnePlate(.,n,onlyNeg)))
+     edgeEffects <- group_by(screenData, fileName) %>% do(tibble(!! varName := estimateOnePlate(.,n,onlyNeg))) %>% ungroup()
      screenData <- left_join(screenData, edgeEffects, by = "fileName")
    }
 
@@ -302,7 +302,7 @@ fitEdgeEffect <- function(screenData, method = "loess", useNeg = TRUE, useLowCon
     } else {
       nLowest <- function(x, n) {sort(unique(x))[seq(1,n)]}
       lowConcTab <- filter(screenData, wellType == "sample") %>%
-        group_by(name) %>% do(tibble(concentration = nLowest(.$concentration,useLowConcentrations)))
+        group_by(name) %>% do(tibble(concentration = nLowest(.$concentration,useLowConcentrations))) %>% ungroup()
     }
   }
 
@@ -312,9 +312,9 @@ fitEdgeEffect <- function(screenData, method = "loess", useNeg = TRUE, useLowCon
   screenData <- mutate(screenData, numRowID = row2num[rowID], numColID = as.integer(colID))
 
   if (method == "loess") {
-    screenData <- group_by(screenData, fileName) %>% do(fitOneLoess(., useNeg, useLowConcentrations, lowConcTab, span))
+    screenData <- group_by(screenData, fileName) %>% do(fitOneLoess(., useNeg, useLowConcentrations, lowConcTab, span)) %>% ungroup()
   } else if (method == "sigmoid") {
-    screenData <- group_by(screenData, fileName) %>% do(fitOneSigmoid(., useNeg, useLowConcentrations, lowConcTab))
+    screenData <- group_by(screenData, fileName) %>% do(fitOneSigmoid(., useNeg, useLowConcentrations, lowConcTab)) %>% ungroup()
   }
 
   select(screenData,-numRowID,-numColID)

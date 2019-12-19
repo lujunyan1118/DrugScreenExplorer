@@ -5,6 +5,7 @@ library(tidyverse)
 library(pheatmap)
 library(RColorBrewer)
 library(plotly)
+library(dr4pl)
 library(DrugScreenExplorer)
 library(DT)
 load("./shinyData.RData")
@@ -53,6 +54,7 @@ ui <- navbarPage("DrugScreenExplorer", inverse = TRUE, id = "tabs",
                             sidebarPanel(uiOutput("seleGroup1"),
                                       conditionalPanel(condition = "input.selectGroup1 != 'All samples'"
                                                        ,uiOutput("seleFeature1")),
+                                      uiOutput("sumTypeBox"),
                                       radioButtons("plotType","Plot type", c("Heatmap","PCA","t-SNE","Drug-drug correlation"),
                                                    selected = "Heatmap"),
                                       conditionalPanel(condition = "input.plotType == 't-SNE'",
@@ -76,14 +78,35 @@ ui <- navbarPage("DrugScreenExplorer", inverse = TRUE, id = "tabs",
                               ),
                               actionButton("doPlot","Plot!", align = "center" ),
                               plotOutput("clusterPlot", width=800, height = 800)
-                            ))))
+                            ))),
+                 tabPanel("Association test",
+                          titlePanel("Test associations between drug responses and sample annotations"),
+                          sidebarLayout(sidebarPanel(uiOutput("seleGroup2"),
+                                        conditionalPanel(condition = "input.selectGroup2 != 'All samples'",
+                                                         uiOutput("seleFeature2")),
+                                        uiOutput("sumTypeBox1"),
+                                        uiOutput("factorBox"),
+                                        textOutput("methodBox"),
+                                        uiOutput("paramBox"),
+                                        uiOutput("ifCorCheck3")),
+                                        mainPanel(dataTableOutput("testRes"),
+                                                  plotlyOutput("diffPlot", width=500, height = 500))
+                                        )))
 
 
 server <- function(input, output, session) {
 
   #Decide which panel to show or hide based on input data columns
-  if (! all(c("normVal","concentration","name") %in% colnames(screenData))) {
+  if (! all(c("sampleID","normVal","concentration","name") %in% colnames(screenData))) {
     hideTab(inputId = "tabs", target = "Dose-response curves")
+  }
+
+  if (! all(c("normVal","name","sampleID") %in% colnames(screenData))) {
+    hideTab(inputId = "tabs", target = "Clustering")
+  }
+
+  if (! all(c("normVal","name","sampleID") %in% colnames(screenData))) {
+    hideTab(inputId = "tabs", target = "Association test")
   }
 
   ##First panel: sample over view and subsetting##
@@ -152,13 +175,13 @@ server <- function(input, output, session) {
   })
 
   output$ifCorCheck <- renderUI({
-    if (input$ifNorm == "viability" && ("normVal.cor" %in% colnames(filteredData()))) {
+    if (!is.null(input$ifNorm) && input$ifNorm == "viability" && ("normVal.cor" %in% colnames(filteredData()))) {
       checkboxInput("ifCorrected","Incubation effect correction", value = FALSE)
     }
   })
 
   output$ifCensorCheck <- renderUI({
-    if(input$ifNorm %in% c("viability","z-score")) {
+    if(!is.null(input$ifNorm) && input$ifNorm %in% c("viability","z-score")) {
       checkboxInput("ifCensor","Fix value range", value = FALSE)
     }
   })
@@ -320,7 +343,7 @@ server <- function(input, output, session) {
 
   #select features for grouping of the patients
   output$seleFeature <- renderUI({
-    if (input$selectGroup != "All samples") {
+    if (!is.null(input$selectGroup) && input$selectGroup != "All samples") {
       allGroups <- unique(pull(filteredData(),input$selectGroup))
       selectInput("seleSub","Groups included",allGroups,
                   size = 5, selectize = FALSE, multiple = TRUE,
@@ -328,8 +351,18 @@ server <- function(input, output, session) {
     }
   })
 
+  colClass <- reactive({
+    sapply(sampleAnnotations, function(n) {
+      detectClass((filteredData() %>% distinct(sampleID,.keep_all = TRUE))[[n]])
+    })
+  })
+
+
   #select features for color scheme
   output$colorBox <- renderUI({
+
+    sampleAnnotations <- sampleAnnotations[colClass() != "nd"]
+
     selectInput("seleColor","Color by",sampleAnnotations,
                 size = 5, selectize = FALSE, multiple = FALSE,
                 selected = sampleAnnotations[1])
@@ -348,7 +381,7 @@ server <- function(input, output, session) {
   doseTab <- reactive({
 
     #subset the screen data according to the selection
-    if (input$selectGroup == "All samples") {
+    if (!is.null(input$selectGroup) && input$selectGroup == "All samples") {
       plotTab <- filter(filteredData(), name == input$nameDrug)
     } else {
       selePlates <- filteredData()[unlist(filteredData()[,input$selectGroup]) %in% input$seleSub,]$fileName
@@ -369,6 +402,10 @@ server <- function(input, output, session) {
 
       plotTab <- doseTab()
 
+      colType <- colClass()[input$seleColor]
+
+      if (colType != "continuous") plotTab[[input$seleColor]] <- as.factor(plotTab[[input$seleColor]])
+
       if (!is.null(input$ifCorrected1) && input$ifCorrected1) {
         valueType <- "normVal.cor"
       } else {
@@ -385,6 +422,7 @@ server <- function(input, output, session) {
       if (input$ifIC50) p <- p + geom_smooth(method = "fitIC50", se=FALSE, method.args= list(logDose =10)) else
         p <- p + stat_summary(aes(group=sampleID), fun.y=mean, geom="line")
 
+      if (colType == "continuous") p <- p + scale_color_gradient(low = "blue",high="red")
       p
 
   })
@@ -400,9 +438,16 @@ server <- function(input, output, session) {
     selectInput("selectGroup1", "Subset samples by", c("All samples", sampleAnnotations))
   })
 
+  # select the summarisation statistics
+  output$sumTypeBox <- renderUI({
+    typeMap <- structure(c("meanViab", "AUC", "IC50"), names = c("average viability","AUC","IC50"))
+    typeAvail <- typeMap[typeMap %in% colnames(filteredData())]
+    radioButtons("seleSumType", "Drug effect summarisation method", typeAvail)
+  })
+
   #select features for grouping of the patients
   output$seleFeature1 <- renderUI({
-    if (input$selectGroup1 != "All samples") {
+    if (!is.null(input$selectGroup1) && input$selectGroup1 != "All samples") {
       allGroups <- unique(pull(filteredData(),input$selectGroup1))
       selectInput("seleSub1","Groups included",allGroups,
                   size = 5, selectize = FALSE, multiple = TRUE,
@@ -413,9 +458,12 @@ server <- function(input, output, session) {
 
   #select features for color scheme on the fourth pannel (for clustering plot)
   output$colorBox1 <- renderUI({
-      selectInput("seleColor1","Color by",sampleAnnotations,
-                  size = 5, selectize = FALSE, multiple = FALSE,
-                  selected = sampleAnnotations[1])
+
+    sampleAnnotations <- sampleAnnotations[colClass() != "nd"]
+
+    selectInput("seleColor1","Color by",sampleAnnotations,
+                size = 5, selectize = FALSE, multiple = FALSE,
+                selected = sampleAnnotations[1])
   })
 
   #show option for incubation effect correction if "normVal.cor" is present
@@ -448,9 +496,9 @@ server <- function(input, output, session) {
     }
 
     if (!is.na(input$ifCorrected2) & input$ifCorrected2) {
-      plotTab <- mutate(plotTab, viab = normVal.cor_auc)
+      plotTab <- mutate(plotTab, viab = plotTab[[paste0(input$seleSumType,".cor")]])
     } else {
-      plotTab <- mutate(plotTab, viab = normVal_auc)
+      plotTab <- mutate(plotTab, viab = plotTab[[input$seleSumType]])
     }
 
     if(input$ifCensor1) {
@@ -490,7 +538,6 @@ server <- function(input, output, session) {
 
   #reactive object for tSNE
   tabTSNE <- reactive({
-    library(Rtsne)
     viabMat <- plotMat()$viabMat
     #prepare distance matrix
     distViab <- dist(t(viabMat))
@@ -535,31 +582,38 @@ server <- function(input, output, session) {
       if(ncol(annoCol) != 0) {
         g <- pheatmap(viabMat,color = colorRampPalette(brewer.pal(n = 7, name ="RdYlBu"))(100), scale = "none",
                       annotation_col = annoCol, cluster_rows = hr,
-                      cluster_cols = hc)$gtable
+                      cluster_cols = hc, silent = TRUE)$gtable
       } else {
         #if nothing to annotate
         g <- pheatmap(viabMat,color = colorRampPalette(brewer.pal(n = 7, name ="RdYlBu"))(100), scale = "none",
-                      cluster_rows = hr, cluster_cols = hc)$gtable
+                      cluster_rows = hr, cluster_cols = hc, silent = TRUE)$gtable
       }
       g
 
-    } else if (input$plotType == "PCA") {
-      pcaTab <- cbind(tabPCA()$pcaTab,annoCol)
-      varExp <- tabPCA()$varExp
-      pcaTab$sampleID <- rownames(pcaTab)
-      g <- ggplot(pcaTab, aes_string(x="PC1",y="PC2",color = input$seleColor1)) + geom_point() + theme_bw() +
-        xlab(sprintf("PC1 (%2.1f%%)",varExp[1])) + ylab(sprintf("PC2 (%2.1f%%)",varExp[2]))
-      g
-
-    } else if (input$plotType == "t-SNE") {
-      plotTab <- cbind(tabTSNE(),annoCol)
-      plotTab$sampleID <- rownames(plotTab)
-      g <- ggplot(plotTab, aes_string(x="x",y="y",color = input$seleColor1)) + geom_point() + theme_bw()
-      g
-
     } else if (input$plotType == "Drug-drug correlation") {
-      g <- pheatmap(cor(t(viabMat),method="spearman"))
+      g <- pheatmap(cor(t(viabMat),method="spearman"), silent = TRUE)
       g$gtable
+    } else {
+      colType <- colClass()[input$seleColor1]
+      if (input$plotType == "PCA") {
+          pcaTab <- cbind(tabPCA()$pcaTab,annoCol)
+          varExp <- tabPCA()$varExp
+          pcaTab$sampleID <- rownames(pcaTab)
+          if (colType != "continuous") pcaTab[[input$seleColor1]] <- as.factor(pcaTab[[input$seleColor1]])
+          g <- ggplot(pcaTab, aes_string(x="PC1",y="PC2",color = input$seleColor1)) + geom_point() + theme_bw() +
+            xlab(sprintf("PC1 (%2.1f%%)",varExp[1])) + ylab(sprintf("PC2 (%2.1f%%)",varExp[2]))
+
+      } else if (input$plotType == "t-SNE") {
+          plotTab <- cbind(tabTSNE(),annoCol)
+          plotTab$sampleID <- rownames(plotTab)
+          if (colType != "continuous") plotTab[[input$seleColor1]] <- as.factor(plotTab[[input$seleColor1]])
+
+          g <- ggplot(plotTab, aes_string(x="x",y="y",color = input$seleColor1)) + geom_point() + theme_bw()
+
+      }
+
+      if (colType == "continuous") g <- g + scale_color_gradient(low = "blue",high="red")
+      g
     }
   })
 
@@ -577,6 +631,184 @@ server <- function(input, output, session) {
              limitsize = FALSE)
     }
   )
+
+  ## Fifth panel: association test ##
+
+
+  #select patient group for subsetting
+  output$seleGroup2 <- renderUI({
+    selectInput("selectGroup2", "Subset samples by", c("All samples", sampleAnnotations))
+  })
+
+
+  #select features for grouping of the patients
+  output$seleFeature2 <- renderUI({
+    if (!is.null(input$selectGroup2) && input$selectGroup2 != "All samples") {
+      allGroups <- unique(filteredData()[[input$selectGroup2]])
+      selectInput("seleSub2","Groups included",allGroups,
+                  size = 5, selectize = FALSE, multiple = TRUE,
+                  selected = allGroups[1])
+    }
+  })
+
+
+  #show option for incubation effect correction if "normVal.cor" is present
+  output$ifCorCheck3 <- renderUI({
+    if ("normVal.cor" %in% colnames(filteredData())) {
+      checkboxInput("ifCorrected3","Incubation effect correction", value = FALSE)
+    }
+  })
+
+  #show options for the summarisation method for viability
+  output$sumTypeBox1 <- renderUI({
+    typeMap <- structure(c("meanViab", "AUC", "IC50"), names = c("average viability","AUC","IC50"))
+    typeAvail <- typeMap[typeMap %in% colnames(filteredData())]
+    radioButtons("seleSumType1", "Drug effect summarisation method", typeAvail)
+  })
+
+  #select features for hypothesis testing
+  output$factorBox <- renderUI({
+
+    sampleAnnotations <- sampleAnnotations[colClass() != "nd"]
+
+    selectInput("seleFactor","Select feature for testing",sampleAnnotations,
+                size = 5, selectize = FALSE, multiple = FALSE,
+                selected = sampleAnnotations[1])
+  })
+
+  #text box to show the model for testing
+  output$methodBox <- renderText({
+    if(!is.null(input$seleFactor)) {
+     colType <- colClass()[input$seleFactor]
+     typeMap <- c(continuous = "Correlation test",
+                  categorical = "one-way ANOVA",
+                  binary = "Student's T-test")
+     paste0("Test used: ",typeMap[colType])
+    }
+  })
+
+  #text box to show the model for testing
+  output$paramBox <- renderUI({
+    if (!is.null(input$seleFactor)) {
+      colType <- colClass()[input$seleFactor]
+      if (colType == "categorical") {
+        return(NULL)
+      } else {
+        if (colType == "binary") {
+          optParam <- c("Equal variance","Unequal variance")
+        } else if (colType == "continuous") {
+          optParam <- c("Parametric (Pearson)","Nonparametric (Spearman)")
+        }
+        radioButtons("seleParam", "Choose test parameter",
+                     choices = optParam)
+      }
+    }
+  })
+
+  #reative object to prepare viability table for testing
+  testInput <- reactive({
+    if (!is.null(input$seleFactor)) {
+      #subset the screen data according to the selection
+      if (!is.null(input$selectGroup2) && input$selectGroup2 == "All samples") {
+        plotTab <- filter(filteredData(), wellType == "sample")
+      } else {
+        selePlates <- filteredData()[unlist(filteredData()[,input$selectGroup2]) %in% input$seleSub2,]$fileName
+        plotTab <- filter(filteredData(), fileName %in% selePlates, wellType == "sample")
+      }
+
+      if (!is.na(input$ifCorrected3) & input$ifCorrected3) {
+        plotTab <- mutate(plotTab, viab = plotTab[[paste0(input$seleSumType1,".cor")]])
+      } else {
+        plotTab <- mutate(plotTab, viab = plotTab[[input$seleSumType1]])
+      }
+
+      colType <- colClass()[input$seleFactor]
+      plotTab <- group_by(plotTab, name, sampleID) %>%
+        summarise(viab = mean(viab)) %>% ungroup() %>%
+        mutate(status = filteredData()[match(sampleID, filteredData()$sampleID),][[input$seleFactor]]) %>%
+        filter(!is.na(status))
+
+      if(colType != "continuous") plotTab$status <- as.factor(as.character(plotTab$status))
+
+      plotTab
+    }
+  })
+  #reactive object to perform the test
+  testRes <- reactive({
+    if (!is.null(input$seleFactor) && !is.null(testInput())) {
+      colType <- colClass()[input$seleFactor]
+      testTab <- testInput() %>% group_by(name) %>% nest()
+      if (colType == "binary") {
+        testParam <- input$seleParam == "Equal variance"
+        res <- mutate(testTab, model = map(data, ~t.test(viab~status,.,var.equal = TRUE))) %>%
+          mutate(out = map(model, broom::tidy)) %>% unnest(out) %>% ungroup() %>%
+          mutate(diffMean = estimate2-estimate1, adjusted.p = p.adjust(p.value, method= "BH")) %>%
+          select(name, diffMean, p.value, adjusted.p) %>% arrange(p.value)
+      } else if (colType == "continuous") {
+        testParam <- ifelse(input$seleParam != "Nonparametric (Spearman)","pearson", "spearman")
+        res <- mutate(testTab, model = map(data, ~cor.test(~ viab+status,.,method = testParam))) %>%
+          mutate(out = map(model, broom::tidy)) %>% unnest(out) %>% ungroup() %>%
+          mutate(coefficient = estimate, adjusted.p = p.adjust(p.value, method= "BH")) %>%
+          select(name, coefficient, p.value, adjusted.p) %>% arrange(p.value)
+      } else if (colType == "categorical") {
+        res <- mutate(testTab, model = map(data, ~aov(lm(viab~status,.)))) %>%
+          mutate(out = map(model, broom::tidy)) %>% unnest(out) %>% ungroup() %>%
+          filter(term == "status") %>%
+          mutate(adjusted.p = p.adjust(p.value, method= "BH")) %>%
+          select(name, statistic, p.value, adjusted.p) %>% arrange(p.value)
+      }
+    res
+    }
+  })
+
+  #render the output table
+  output$testRes <- renderDataTable({
+    if (!is.null(testRes())) {
+       testRes() %>% mutate_if(is.numeric, formatC, digits=2, format ="e") %>%
+        datatable(selection = 'single',
+        options = list(dom = 'tip',
+                       pageLength = 6))
+    }
+  })
+
+  #boxplot for the t-Test panel
+  output$diffPlot <- renderPlotly({
+    if (!is.null(testInput()) && !is.null(input$seleFactor)) {
+      plotTab <- testInput()
+      pTab <- testRes()
+      colType <- colClass()[input$seleFactor]
+
+      if (!is.null(input$testRes_row_last_clicked)) {
+        drugSelect <- pTab$name[input$testRes_row_last_clicked]
+      } else drugSelect <- pTab$name[1]
+
+      plotTab <- filter(plotTab, name == drugSelect)
+      if (colType != "continuous") {
+          p <- ggplot(plotTab, aes(x=status, y=viab, label = sampleID)) +
+            geom_boxplot(width = 0.5, alpha = 0.5, aes(fill= status)) +
+            geom_point() +
+            ylab("Viability") + xlab(input$seleFactor) +
+            ggtitle(as.character(drugSelect)) + theme_bw() +
+            theme(legend.position = "none", plot.title = element_text(hjust =0.5),
+                  text = element_text(size=15))
+
+          #hide outliers in the boxplot
+          p <- plotly_build(p)
+          p$x$data[[1]]$marker$opacity <- 0
+          p$x$data[[2]]$marker$opacity <- 0
+      } else {
+        p <- ggplot(plotTab, aes(x=status, y=viab, label=sampleID)) +
+          geom_point(col = "darkblue") +
+          geom_smooth(method="lm", se=FALSE, linetype = "dashed", col = "firebrick") +
+          ylab("Viability") + xlab(input$seleFactor) +
+          ggtitle(as.character(drugSelect)) + theme_bw() +
+          theme(legend.position = "none", plot.title = element_text(hjust =0.5),
+                text = element_text(size=15))
+      }
+
+      ggplotly(p) %>% config(displayModeBar = F)
+    }
+  })
 }
 
 shinyApp(ui = ui, server = server)

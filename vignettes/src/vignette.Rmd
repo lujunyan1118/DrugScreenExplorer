@@ -233,12 +233,23 @@ grid.arrange(grobs = g, ncol =2)
 ```
 Now the incubation effect has been largely removed.
 
+**Adjust edge effect for the whole screening data**
+```{r}
+screenData <- correctEdgeEffect(screenData, correctMethod = "bliss")
+```
+
+
+# Summarisation of drug effect
+```{r}
+screenData <- summariseScreen(screenData, method = c("average","AUC"))
+```
+
+
 # Interactive data exploration using Shiny app
 
 Prepare data set for shiny app
 ```{r}
-screenData.corr <- correctEdgeEffect(screenData, correctMethod = "bliss")
-makeShiny(screenData.corr, sampleAnnotations = c("batch","sampleID","patientID"))
+makeShiny(screenData, sampleAnnotations = c("batch","sampleID","patientID","Mutation","Expression","Group"))
 ```
 The functions avaialbe for the shiny app will be dependent on the sample annotations provided by the user.   
 

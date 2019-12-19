@@ -4,8 +4,8 @@
 \alias{readScreen}
 \title{Read the screening results from a whole experiment}
 \usage{
-readScreen(rawDir, plateAnnotationFile, wellAnnotationFile, rowRange, colRange,
-  sep, negWell = c(), posWell = c(), normalization = FALSE,
+readScreen(rawDir, plateAnnotationFile, wellAnnotationFile, rowRange,
+  colRange, sep, negWell = c(), posWell = c(), normalization = FALSE,
   method = "negatives", discardLayer = 0, commaAsDecimal = FALSE,
   csvFormat = "csv2")
 }

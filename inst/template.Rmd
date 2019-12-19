@@ -18,6 +18,7 @@ output:
 library(knitr)
 library(kableExtra)
 library(gridExtra)
+library(DrugScreenExplorer)
 library(tidyverse)
 #read in data, will not show.
 screenData <- readRDS("screenData.rds")
@@ -84,14 +85,14 @@ if (!"normVal" %in% colnames(screenData)) {
   g <- platePlot(screenData, plotType = "viability")
 }
 
-nPlate <- length(unique(screenData))
+nPlate <- length(unique(screenData$fileName))
 ```
 
 ```{r plot plate plots, echo= params$showCode & params$ifPlatePlot, eval = params$ifPlatePlot, fig.width=16, fig.height=((nPlate+1) %/% 2)*3}
 if (nPlate <= 10) {
-  plot(grid.arrange(grobs = g, ncol = 2))
+  grid.arrange(grobs = g, ncol = 2)
 } else {
-  plot(grid.arrange(grobs = g[1:10], ncol = 2))
+  grid.arrange(grobs = g[1:10], ncol = 2)
   makepdf(g, "plots/platePlots.pdf", 2, 3, 12, 12)
 }
 ```

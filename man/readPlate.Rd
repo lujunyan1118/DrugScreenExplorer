@@ -4,8 +4,8 @@
 \alias{readPlate}
 \title{Read the screening result from one plate}
 \usage{
-readPlate(plateFile, rowRange = c(3, 18), colRange = 2, sep = "[;\\t]",
-  commaAsDecimal = FALSE)
+readPlate(plateFile, rowRange = c(3, 18), colRange = 2,
+  sep = "[;\\t]", commaAsDecimal = FALSE)
 }
 \arguments{
 \item{plateFile}{A characther string specifying the file name for the plate result}

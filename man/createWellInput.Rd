@@ -4,8 +4,8 @@
 \alias{createWellInput}
 \title{Create well annotation file}
 \usage{
-createWellInput(file, colNum, rowNum, entries = c("name", "concentration"),
-  platePerSample = 1, csvFormat = "csv2")
+createWellInput(file, colNum, rowNum, entries = c("name",
+  "concentration"), platePerSample = 1, csvFormat = "csv2")
 }
 \arguments{
 \item{file}{The output file name and directory for the sample annotation file}

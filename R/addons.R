@@ -21,7 +21,7 @@ genRowIDs <- function(x) {
 
 ## Function to generate an ordered column IDs based on the number of columns
 genColIDs <- function(x) {
-  sprintf("%02s",seq(x))
+  formatC(seq(x),width=2,format = "d",flag="0")
 }
 
 

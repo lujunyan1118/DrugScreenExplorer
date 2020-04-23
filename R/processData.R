@@ -125,7 +125,7 @@ correctEdgeEffect <- function(screenData, estimateMethod = "loess",
 summariseScreen <- function(screenData, method = "average") {
   #firstly check if necessary columns are presented
   if (! all(c("name", "concentration","sampleID") %in% colnames(screenData))) {
-    stop("No information of name, concentration, sampleID or wellType found")
+    stop("No information of name, concentration or sampleID found")
   }
 
   if (! "normVal" %in% colnames(screenData)) {

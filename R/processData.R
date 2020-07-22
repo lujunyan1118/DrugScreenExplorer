@@ -29,7 +29,8 @@ fitEdgeEffect <- function(screenData, method = "loess", useNeg = TRUE, useLowCon
     } else {
       nLowest <- function(x, n) {sort(unique(x))[seq(1,n)]}
       lowConcTab <- filter(screenData, wellType == "sample") %>%
-        group_by(name) %>% do(tibble(concentration = nLowest(.$concentration,useLowConcentrations))) %>% ungroup()
+        group_by(name) %>% do(tibble(concentration = nLowest(.$concentration,useLowConcentrations))) %>%
+        ungroup()
     }
   }
 
@@ -138,20 +139,27 @@ summariseScreen <- function(screenData, method = "average") {
 
   if (ifCor) {
     subData <- group_by(subData, sampleID, name, concentration) %>%
-      summarise(viab = mean(normVal,na.rm = TRUE), viab.cor = mean(normVal.cor, na.rm=TRUE))
+      summarise(viab = mean(normVal,na.rm = TRUE), viab.cor = mean(normVal.cor, na.rm=TRUE)) %>%
+      ungroup()
   } else {
     subData <- group_by(subData, sampleID, name, concentration) %>%
-      summarise(viab = mean(normVal,na.rm = TRUE))
+      summarise(viab = mean(normVal,na.rm = TRUE)) %>%
+      ungroup()
+
   }
 
   if ("average" %in% method) {
     if (ifCor) {
       sumTab <- group_by(subData, sampleID, name) %>%
         summarise(meanViab = mean(viab, na.rm=TRUE),
-                  meanViab.cor = mean(viab.cor))
+                  meanViab.cor = mean(viab.cor)) %>%
+        ungroup()
+
     } else {
       sumTab <- group_by(subData, sampleID, name) %>%
-        summarise(meanViab = mean(viab, na.rm=TRUE))
+        summarise(meanViab = mean(viab, na.rm=TRUE)) %>%
+        ungroup()
+
     }
 
     if ("meanViab" %in% colnames(screenData)) screenData[["meanViab"]] <- NULL
@@ -161,10 +169,14 @@ summariseScreen <- function(screenData, method = "average") {
   if ("AUC" %in% method) {
     if (ifCor) {
       sumTab <- group_by(subData, sampleID, name) %>%
-        summarize(AUC = calcAUC(viab,concentration), AUC.cor = calcAUC(viab.cor,concentration))
+        summarize(AUC = calcAUC(viab,concentration), AUC.cor = calcAUC(viab.cor,concentration)) %>%
+        ungroup()
+
     } else {
       sumTab <- group_by(subData, sampleID, name) %>%
-        summarize(AUC = calcAUC(viab,concentration))
+        summarize(AUC = calcAUC(viab,concentration)) %>%
+        ungroup()
+
     }
     if ("AUC" %in% colnames(screenData)) screenData[["AUC"]] <- NULL
     screenData <- left_join(screenData, sumTab, by = c("sampleID","name"))
@@ -175,14 +187,14 @@ summariseScreen <- function(screenData, method = "average") {
     sumTab <- group_by(subData, sampleID, name) %>%
       nest() %>%
       mutate(model = map(data, ~sumIC50(viab~concentration,.))) %>%
-      unnest("model")
+      unnest("model") %>% ungroup()
     sumTab$data <- NULL
 
     if (ifCor) {
       sumTab.cor <- group_by(subData, sampleID, name) %>%
         nest() %>%
         mutate(model = map(data, ~sumIC50(viab.cor~concentration,.))) %>%
-        unnest("model")
+        unnest("model") %>% ungroup()
       sumTab.cor$data <- NULL
       newColName <- colnames(sumTab.cor)
       newColName[!newColName %in% c("sampleID","name")] <- paste0(newColName[!newColName %in% c("sampleID","name")],".cor")

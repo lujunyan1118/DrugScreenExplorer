@@ -22,7 +22,7 @@ Imports:
     gridExtra,
     tools,
     dr4pl,
-    stringr
+    stringr,
     plotly,
     Rtsne,
     pheatmap,

@@ -44,7 +44,7 @@ kable(screenInfo, align = "c", col.names = NULL, format = "html") %>% kable_styl
 if (! "plateID" %in% colnames(screenData)) screenData$plateID <- 1
 plotTab <- filter(screenData, !duplicated(paste0(wellID,"_",plateID))) %>% 
   mutate(fileName = sprintf("layout %s",plateID))
-plotList <- platePlot(plotTab, plotType = "layout")
+plotList <- plotPlate(plotTab, plotType = "layout")
 nLayout <- length(unique(plotTab$plateID))
 ```
 
@@ -79,10 +79,10 @@ if (nPlate <= 20) {
 ```{r prepare plate plot, echo= params$showCode & params$ifPlatePlot, eval = params$ifPlatePlot}
 if (!"normVal" %in% colnames(screenData)) {
   print("Normalized viablity not found. Using z-score")
-  g <- platePlot(screenData, plotType = "zscore")
+  g <- plotPlate(screenData, plotType = "zscore")
 } else {
   print("Normalized viablity found. Using viability values")
-  g <- platePlot(screenData, plotType = "viability")
+  g <- plotPlate(screenData, plotType = "viability")
 }
 
 nPlate <- length(unique(screenData$fileName))
@@ -92,7 +92,7 @@ nPlate <- length(unique(screenData$fileName))
 if (nPlate <= 10) {
   grid.arrange(grobs = g, ncol = 2)
 } else {
-  grid.arrange(grobs = g[1:10], ncol = 2)
+  grid.arrange(grobs = g[seq(10)], ncol = 2)
   makepdf(g, "plots/platePlots.pdf", 2, 3, 12, 12)
 }
 ```
@@ -160,7 +160,7 @@ p <- ggplot(plotTab, aes(x=fileName, y = meanFac, fill = layer)) +
 
 allNames <- unique(plotTab$fileName)
 if (length(allNames) > 10) {
-  plotTab_top20 <- filter(plotTab, fileName %in% allNames[1:10])
+  plotTab_top20 <- filter(plotTab, fileName %in% allNames[seq(10)])
   p_top20 <- ggplot(plotTab_top20, aes(x=fileName, y = meanFac, fill = layer)) + 
     geom_bar(position = position_dodge(), stat = "identity") + coord_flip() + theme_bw() + 
     xlab("file names (ranked by mean of raw counts)") + ylab("edge effect ratio") + scale_fill_brewer(palette = 1)
